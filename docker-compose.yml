@@ -14,6 +14,7 @@ services:
       - ./data:/var/lib/mysql
    networks:
       - springboot-mysql-net
+      - springboot-net
 
   openeyeconfigserver:
     container_name: openeyeconfigserver
@@ -76,49 +77,46 @@ services:
     restart: on-failure
 
   openeyeimageservice:
-    #container_name: openeyeimageservice
+    container_name: openeyeimageservice
     build:
       context: ./ImageService/OpenEyeImageService/
       dockerfile: Dockerfile
-    #ports:
-    #  - "8083:8083"
+    ports:
+      - "8083:8083"
     environment:
       - eureka.client.service-url.defaultZone=http://openeyeserviceregistry:8761/eureka/
       - eureka.client.enabled=true
       - eureka.host=openeyeserviceregistry
       - eureka.instance.preferIpAddress=false
       - eureka.instance.hostname=localhost
-    deploy:
-      mode: replicated
-      replicas: 2
+
     depends_on:
       openeyeserviceregistry:
         condition: service_started
     networks:
       - springboot-net
     restart: on-failure
-
-  openeyeservicegateway:
-    container_name: openeyeservicegateway
+    
+  openeyeimageservice2:
+    container_name: openeyeimageservice2
     build:
-      context: ./ServiceGateWay/OpenEyeServiceGateway/
+      context: ./ImageService/OpenEyeImageService/
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8084:8084"
     environment:
       - eureka.client.service-url.defaultZone=http://openeyeserviceregistry:8761/eureka/
       - eureka.client.enabled=true
-      - eureka.host=openeyeservicegateway
-      - eureka.instance.preferIpAddress=true
+      - eureka.host=openeyeserviceregistry
+      - eureka.instance.preferIpAddress=false
       - eureka.instance.hostname=localhost
-
 
     depends_on:
       openeyeserviceregistry:
         condition: service_started
     networks:
       - springboot-net
-    restart: on-failure    
+    restart: on-failure
 
   openeyeattendanceservice:
     container_name: openeyeattendanceservice
@@ -127,11 +125,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8082:8082"
-    depends_on:
-      mysqldb:
-        condition: service_started
-      openeyeserviceregistry:
-        condition: service_started
     environment:
       - spring.datasource.url=jdbc:mysql://mysqldb/openeye?createDatabaseIfNotExist=true
       - spring.datasource.username=root
@@ -141,11 +134,48 @@ services:
       - eureka.host=openeyeserviceregistry
       - eureka.instance.preferIpAddress=false
       - eureka.instance.hostname=localhost
-     
+    
+    depends_on:
+      mysqldb:
+        condition: service_started
+      openeyeserviceregistry:
+        condition: service_started 
     networks:
-      - springboot-mysql-net
       - springboot-net
     restart: on-failure
+   
+  openeyeservicegateway:
+    container_name: openeyeservicegateway
+    build:
+      context: ./ServiceGateWay/openeyeservicegateway/
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      eureka.client.service-url.defaultZone: http://openeyeserviceregistry:8761/eureka/
+      eureka.client.enabled: true
+      eureka.host: openeyeserviceregistry
+      eureka.instance.preferIpAddress: true
+      eureka.instance.hostname: localhost
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_URI: http://openeyeattendanceservice:8082
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_ID: ATTENDANCE-SERVICE
+      SPRING_CLOUD_GATEWAY_ROUTES[0]_PREDICATES[0]: Path= /attendance/*
+  
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_URI: http://openeyeemployeeservice:9091
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_ID: EMPLOYEE-SERVICE
+      SPRING_CLOUD_GATEWAY_ROUTES[1]_PREDICATES[0]: Path= /employee/*
+
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_URI: http://openeyeimageservice:8083
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_ID: IMAGE-SERVICE
+      SPRING_CLOUD_GATEWAY_ROUTES[2]_PREDICATES[0]: Path= /images/*
+
+    depends_on:
+      openeyeserviceregistry:
+        condition: service_started
+    networks:
+      - springboot-net
+    restart: on-failure    
+
 
 networks:
   springboot-net:
